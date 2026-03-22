@@ -2,7 +2,9 @@ import { describe, it } from 'node:test'
 import { expect } from 'chai'
 import { EventEmitter } from 'node:events'
 import { bodyParser } from '../src/modules/bodyParser.js'
+import { cookieParser } from '../src/modules/cookieParser.js'
 import { cors } from '../src/modules/cors.js'
+import { jsonResponse } from '../src/modules/jsonResponse.js'
 import { rateLimit } from '../src/modules/rateLimit.js'
 
 function mockReq(options = {}) {
@@ -397,5 +399,246 @@ describe('rateLimit', () => {
         const res2 = mockRes()
         middleware(mockReq({ ip }), res2, () => {})
         expect(res2.headers['X-RateLimit-Remaining']).to.equal('0')
+    })
+})
+
+describe('bodyParser req.json alias', () => {
+    it('sets req.json when parsing JSON body', (_, done) => {
+        const middleware = bodyParser()
+        const req = mockReq({ headers: { 'content-type': 'application/json' } })
+        const res = mockRes()
+        middleware(req, res, () => {
+            expect(req.json).to.deep.equal({ x: 1 })
+            expect(req.body).to.deep.equal({ x: 1 })
+            expect(req.json).to.equal(req.body)
+            done()
+        })
+        emitBody(req, JSON.stringify({ x: 1 }))
+    })
+
+    it('does not set req.json for urlencoded body', (_, done) => {
+        const middleware = bodyParser()
+        const req = mockReq({ headers: { 'content-type': 'application/x-www-form-urlencoded' } })
+        const res = mockRes()
+        middleware(req, res, () => {
+            expect(req.json).to.be.undefined
+            expect(req.body).to.deep.equal({ a: 'b' })
+            done()
+        })
+        emitBody(req, 'a=b')
+    })
+})
+
+describe('jsonResponse', () => {
+    function mockResWithEnd() {
+        const res = mockRes()
+        let endData = null
+        res.end = (data) => {
+            endData = data
+        }
+        res.getEndData = () => endData
+        return res
+    }
+
+    it('adds jsonData method to res', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        middleware(req, res, () => {})
+        expect(res.jsonData).to.be.a('function')
+    })
+
+    it('adds jsonError method to res', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        middleware(req, res, () => {})
+        expect(res.jsonError).to.be.a('function')
+    })
+
+    it('jsonData sets correct JSON structure', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        middleware(req, res, () => {})
+        res.jsonData({ id: 1, name: 'test' })
+        const parsed = JSON.parse(res.getEndData())
+        expect(parsed).to.deep.equal({ data: { id: 1, name: 'test' }, error: null })
+    })
+
+    it('jsonError sets correct JSON structure', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        middleware(req, res, () => {})
+        res.jsonError('NOT_FOUND', 'Resource not found')
+        const parsed = JSON.parse(res.getEndData())
+        expect(parsed).to.deep.equal({ data: null, error: { code: 'NOT_FOUND', message: 'Resource not found' } })
+    })
+
+    it('jsonData sets Content-Type header', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        middleware(req, res, () => {})
+        res.jsonData(null)
+        expect(res.headers['Content-Type']).to.equal('application/json')
+    })
+
+    it('jsonError sets Content-Type header', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        middleware(req, res, () => {})
+        res.jsonError('ERR', null)
+        expect(res.headers['Content-Type']).to.equal('application/json')
+    })
+
+    it('jsonData works with null data', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        middleware(req, res, () => {})
+        res.jsonData(null)
+        const parsed = JSON.parse(res.getEndData())
+        expect(parsed.data).to.equal(null)
+        expect(parsed.error).to.equal(null)
+    })
+
+    it('calls next()', () => {
+        const middleware = jsonResponse()
+        const req = mockReq()
+        const res = mockResWithEnd()
+        let called = false
+        middleware(req, res, () => {
+            called = true
+        })
+        expect(called).to.be.true
+    })
+})
+
+describe('cookieParser', () => {
+    it('parses single cookie', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: { cookie: 'session=abc123' } })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        expect(req.cookies.session).to.equal('abc123')
+    })
+
+    it('parses multiple cookies', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: { cookie: 'a=1; b=2; c=3' } })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        expect(req.cookies).to.deep.equal({ a: '1', b: '2', c: '3' })
+    })
+
+    it('decodes URI-encoded cookie values', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: { cookie: 'token=hello%20world' } })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        expect(req.cookies.token).to.equal('hello world')
+    })
+
+    it('sets req.cookies to empty object when no cookie header', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        expect(req.cookies).to.deep.equal({})
+    })
+
+    it('adds setCookie method to res', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        expect(res.setCookie).to.be.a('function')
+    })
+
+    it('setCookie sets Set-Cookie header with basic value', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('token', 'abc')
+        expect(res.headers['Set-Cookie']).to.include('token=abc')
+    })
+
+    it('setCookie includes HttpOnly when set', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('s', 'v', { httpOnly: true })
+        expect(res.headers['Set-Cookie']).to.include('HttpOnly')
+    })
+
+    it('setCookie includes Secure when set', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('s', 'v', { secure: true })
+        expect(res.headers['Set-Cookie']).to.include('Secure')
+    })
+
+    it('setCookie includes Path when set', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('s', 'v', { path: '/' })
+        expect(res.headers['Set-Cookie']).to.include('Path=/')
+    })
+
+    it('setCookie includes Max-Age when set', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('s', 'v', { maxAge: 3600 })
+        expect(res.headers['Set-Cookie']).to.include('Max-Age=3600')
+    })
+
+    it('setCookie includes SameSite when set', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('s', 'v', { sameSite: 'Strict' })
+        expect(res.headers['Set-Cookie']).to.include('SameSite=Strict')
+    })
+
+    it('setCookie includes Expires when set', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        const expires = new Date('2030-01-01T00:00:00Z')
+        res.setCookie('s', 'v', { expires })
+        expect(res.headers['Set-Cookie']).to.include('Expires=')
+    })
+
+    it('setCookie URI-encodes value', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('msg', 'hello world')
+        expect(res.headers['Set-Cookie']).to.include('hello%20world')
+    })
+
+    it('calls next()', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        let called = false
+        middleware(req, res, () => {
+            called = true
+        })
+        expect(called).to.be.true
     })
 })

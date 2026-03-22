@@ -1,3 +1,5 @@
 export { bodyParser } from './modules/bodyParser.js'
+export { cookieParser } from './modules/cookieParser.js'
 export { cors } from './modules/cors.js'
+export { jsonResponse } from './modules/jsonResponse.js'
 export { rateLimit } from './modules/rateLimit.js'

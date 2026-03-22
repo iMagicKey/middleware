@@ -25,6 +25,7 @@ export function bodyParser(options = {}) {
             try {
                 if (contentType.includes('application/json')) {
                     req.body = JSON.parse(raw)
+                    req.json = req.body
                 } else {
                     req.body = Object.fromEntries(new URLSearchParams(raw))
                 }
