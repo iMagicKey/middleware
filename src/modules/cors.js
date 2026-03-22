@@ -5,6 +5,10 @@ export function cors(options = {}) {
     const credentials = options.credentials ?? false
     const maxAge = options.maxAge ?? 86400
 
+    if (origin === '*' && credentials === true) {
+        throw new Error('CORS: credentials:true cannot be used with origin:"*"')
+    }
+
     return function corsMiddleware(req, res, next) {
         const reqOrigin = req.headers.origin || ''
         let allowOrigin

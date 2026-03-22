@@ -26,7 +26,7 @@ export function cookieParser() {
             if (options.secure) parts.push('Secure')
             if (options.httpOnly) parts.push('HttpOnly')
             if (options.sameSite) parts.push(`SameSite=${options.sameSite}`)
-            res.setHeader('Set-Cookie', parts.join('; '))
+            res.appendHeader('Set-Cookie', parts.join('; '))
         }
 
         next()

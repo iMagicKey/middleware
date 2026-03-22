@@ -28,6 +28,16 @@ function mockRes() {
         setHeader(k, v) {
             headers[k] = v
         },
+        appendHeader(k, v) {
+            const existing = headers[k]
+            if (existing === undefined) {
+                headers[k] = v
+            } else if (Array.isArray(existing)) {
+                existing.push(v)
+            } else {
+                headers[k] = [existing, v]
+            }
+        },
         writeHead(code) {
             statusCode = code
         },
@@ -199,7 +209,7 @@ describe('cors', () => {
     })
 
     it('sets credentials header when credentials: true', () => {
-        const middleware = cors({ credentials: true })
+        const middleware = cors({ origin: 'https://app.com', credentials: true })
         const req = mockReq({ headers: { origin: 'https://app.com' } })
         const res = mockRes()
         middleware(req, res, () => {})
@@ -640,5 +650,25 @@ describe('cookieParser', () => {
             called = true
         })
         expect(called).to.be.true
+    })
+
+    it('setCookie sets both cookies when called twice (no overwrite)', () => {
+        const middleware = cookieParser()
+        const req = mockReq({ headers: {} })
+        const res = mockRes()
+        middleware(req, res, () => {})
+        res.setCookie('a', '1')
+        res.setCookie('b', '2')
+        const setCookieHeader = res.headers['Set-Cookie']
+        const cookies = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader]
+        expect(cookies.length).to.equal(2)
+        expect(cookies.some((c) => c.startsWith('a='))).to.be.true
+        expect(cookies.some((c) => c.startsWith('b='))).to.be.true
+    })
+})
+
+describe('cors — spec violations', () => {
+    it('throws when origin is "*" and credentials is true', () => {
+        expect(() => cors({ origin: '*', credentials: true })).to.throw(Error, 'CORS: credentials:true cannot be used with origin:"*"')
     })
 })
