@@ -161,3 +161,14 @@ createServer((req, res) => {
 - **Middleware order matters**: always apply `cors` before `rateLimit` and `bodyParser` so OPTIONS preflights are handled before hitting the rate limiter. Apply `bodyParser` last.
 - **`req.body` is not set** by default in Node.js — always add `bodyParser` to any route that reads the request body.
 - **`credentials: true` and `origin: '*'`**: browsers reject credentialed requests with wildcard origin. When using `credentials: true`, set `origin` to an explicit domain or function.
+
+---
+
+## Knowledge Base
+
+**KB tags for this library:** `imagic-middleware, middleware`
+
+Before COMPLEX tasks — invoke `knowledge-reader` with tags above + task-specific tags.
+After completing a task — if a reusable pattern, error, or decision emerged, invoke `knowledge-writer` with `source: imagic-middleware`.
+
+See `CLAUDE.md` §Knowledge Base Protocol for the full workflow.
